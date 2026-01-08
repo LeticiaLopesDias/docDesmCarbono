@@ -1,6 +1,7 @@
 ###
-# Análise dos resultados de matching
-# outubro/2025
+# Organiza e explora os resultados do matching por ano (1985-2024)
+# Data: outubro/2025
+# Autor: Letícia Lopes Dias (leticia_lopes@discente.ufg.br)
 ###
 
 if(!require(pacman)) install.packages("pacman")
@@ -8,21 +9,17 @@ pacman::p_load(
  tidyverse
 )
 
+# Organizar dados de resultados -----------------------------------------------
 
-# Tabela de Resultados ----------------------------------------------------
-
-# Criar tabela com ano x desmatamento total x desmatamento evitado 
-# e outros resultados da regressão
-
-### Resultados
-# Define o diretório onde estão os arquivos
+### Resultados do matching
+# Definir diretório onde estão os arquivos
 caminho <- "Finais/"
 
-# Lista todos os arquivos que seguem o padrão
+# Listar todos os arquivos que seguem o padrão
 arquivos <- list.files(path = caminho, pattern = "^resultado_\\d{4}\\.csv$", 
                        full.names = TRUE)
 
-# Lê e empilha todos os csv
+# Ler e empilhar todos os csv
 dados <- arquivos |> 
   # cria uma tabela com o nome do arquivo e o conteúdo
   map_df(~ read_csv2(.x) |> 
@@ -30,18 +27,19 @@ dados <- arquivos |>
   relocate(ano, .before = term) |> 
   mutate(ano = as.integer(ano))
 
-# Visualiza o resultado
+# Visualizar o resultado
 glimpse(dados)
 dados2 <- dados |> 
   mutate(ano = ano+1)
 # Somar +1 no ano, porque na verdade o resultado diz respeito ao desmamento
 # no ano seguinte ao do que está no nome do arquivo
 
+# Savar tabela de resultados
 writexl::write_xlsx(dados2, "Finais/resultado_por_ano.xlsx")
 
 
-### Qualidade matching
-
+### Dados de qualidade do matching
+# Abrir arquivos salvos como 'balance'
 b1 <- readRDS("Finais/balance_1985.rds")
 glimpse(b1$reduction)
 str(b1)
@@ -53,8 +51,7 @@ head(antes)
 names(antes)
 antes$variavel  <- rownames(b1$sum.all)
 
-
-# Lista todos os arquivos que seguem o padrão
+# Listar todos os arquivos que seguem o padrão
 arquivos <- list.files(path = caminho, pattern = "^balance_\\d{4}\\.rds$", 
                        full.names = TRUE)
 
@@ -92,7 +89,7 @@ dados_balance <- map_dfr(arquivos, function(arq) {
   joined
 })
 
-# 3. Reorganizar colunas
+# Reorganizar colunas
 dados_balance <- dados_balance |> 
   select(ano, variavel, std_mean_diff_before, 
          std_mean_diff_after, reduction
@@ -103,8 +100,7 @@ glimpse(dados_balance)
 writexl::write_xlsx(dados_balance, "Finais/balance_por_ano.xlsx")
 
 
-
-# Análise Resultados por Ano ----------------------------------------------
+# Explorar os resultados ----------------------------------------------
 
 bal <- readxl::read_xlsx("Finais/balance_por_ano.xlsx")
 glimpse(bal)
@@ -123,8 +119,6 @@ bal |>
        y = "Diferença média padronizada \npós-pareamento") +
   facet_wrap(~ variavel) +
   theme_bw()
-ggsave("Img/Dif_media_pos.png", width = 21, height = 23,
-       units = "cm")
 
 bal |> 
   ggplot() +
@@ -153,7 +147,6 @@ bal |>
   geom_hline(aes(yintercept = .25), color = "red")
 
 
-
 ## Resultados da regresão
 dados <- readxl::read_xlsx("Finais/resultado_por_ano.xlsx")
 glimpse(dados)
@@ -166,39 +159,6 @@ dados |>
   ggplot() +
   geom_point(aes(x = ano, y = p.value))
 # Todos os anos tiveram resultado p <.5
-
-viridis::turbo(n = 5)
-
-
-dados |> 
-  select(ano, desm_evitado, desm_total) |> 
-  rename(
-    Evitado = desm_evitado,
-    Total = desm_total
-  ) |> 
-  pivot_longer(cols = c(Evitado, Total), 
-               values_to = "desm", names_to = "tipo") |> 
-  ggplot() +
-  geom_col(aes(x = ano, y = desm, fill = tipo),
-           position = position_dodge()) + 
-  scale_fill_manual(values = c("#28BBECFF","#7A0403FF")) +
-  scale_y_continuous(expand = expansion(mult = c(0, 0.05)),
-                     labels = scales::number_format(decimal.mark = ",",
-                                                    big.mark = "."),
-                     n.breaks = 7) +
-  scale_x_continuous(n.breaks = 8,
-                     limits = c(1985.5,2024.5),
-                     expand = expansion(mult = c(0.01, 0.01)),) +
-  labs(x = element_blank(),
-       y = "Desmatamento (km²)",
-       fill = element_blank()) +
-  theme_classic() +
-  theme(legend.position = "inside", 
-        legend.position.inside = c(.75, .8))
-
-ggsave("Img/Desmatamento.png", width = 15, height = 9,
-       units = "cm")
-
 
 dados |> 
   mutate(ano = ano) |> 
@@ -216,6 +176,3 @@ dados |>
                      limits = c(1985.5,2024.5),
                      expand = expansion(mult = c(0.01, 0.01))) +
   theme_classic()
-
-ggsave("Img/Estimate.png", width = 15, height = 9,
-       units = "cm")

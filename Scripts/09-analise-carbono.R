@@ -1,6 +1,7 @@
 ###
 # Análise de emissões evitadas - pós-matching
-# novembro/2025
+# Data: novembro/2025
+# Autor: Letícia Lopes Dias (leticia_lopes@discente.ufg.br)
 ###
 
 if(!require(pacman)) install.packages("pacman")
@@ -10,11 +11,8 @@ pacman::p_load(
   terra
 )
 
-# mat_p1 <- readRDS("Finais/m_data_85_14.rds")
-# glimpse(mat_p1)
-
 # Analisar primeiro período pós métrica de carbono
-mat_p2 <- readRDS("Finais/m_data_15_24.rds")
+mat_p2 <- readRDS("Finais/m_data_16_24.rds")
 glimpse(mat_p2)
 # Esse dataset contém unidades pareadas e adiciona colunas para distance,
 # weights, e subclass
@@ -45,13 +43,13 @@ mat_p2 |>
   count(protecao) |> 
   view()
 
-# varias celulas de controle foram pareadas com uma ou mais de tratamento
+# Várias células de controle foram pareadas com uma ou mais de tratamento;
 # isso forma a subclass
 
 # Para selecionar células para o "melhor" grupo controle e ver o total de 
 # desmatamento que ocorreu nelas (com tamanho do grupo = tamanho tratadas):
-# Por subclasse
-# selecionar o mesmo número de células controle, em relação as tratadas
+# Por subclasse;
+# selecionar o mesmo número de células controle, em relação às tratadas
 # selecionar aquelas com maior prop score
 
 grupo_controle <- mat_p2  |> 
@@ -75,19 +73,18 @@ grupo_controle <- mat_p2  |>
   })
 
 glimpse(grupo_controle)
-vroom::vroom_write(grupo_controle, "Intermediarios/Controle_15_24.csv", append = F)
-
-
+# Salvar resultado
+vroom::vroom_write(grupo_controle, "Intermediarios/Controle_16_24.csv", append = F)
 
 ### Analise
-grupo_controle <- vroom::vroom("Intermediarios/Controle_15_24.csv")
+grupo_controle <- vroom::vroom("Intermediarios/Controle_16_24.csv")
 glimpse(grupo_controle)
 
 grupo_controle |> 
   count(subclass) |> view()
 
-# conferir se grupo controle foi selecionado corretamente
-
+# conferir se grupo controle foi selecionado corretamente, ou seja,
+# pelo maior propensity score
 mat_p2 |> 
   filter(protecao == 0) |> 
   filter(subclass == 1) |> 
@@ -96,7 +93,6 @@ mat_p2 |>
 grupo_controle |> 
   filter(subclass == 1) |> 
   view()
-
 # Ok!
 
 # Agora, calcular área desmatada
@@ -117,6 +113,8 @@ dados |>
   )
 # 109.076 km²
 # Valor próximo, mas não idêntico
+
+# Limpar memória
 rm("dados")
 
 # Pegar carbono de cada célula; calcular emissões evitadas espacialmente
@@ -171,11 +169,17 @@ sum(analise_c$carb_evit, na.rm = T)
 # 2,2 bilhões de tC seriam evitadas, considerando conversão de 100% da biomassa
 # inicial
 
+# Limpar memória
 rm("grupo_controle")
 rm("grupo_controle2")
 
 
 # Rasterizar as minhas variaveis de interesse do dataframe
+# para obter resultado espacializado e identificar cada AP 
+# Usar o raster modelo para obter os índices de célula
+modelo <- rast("Intermediarios/modelo.tif")
+plot(modelo)
+
 r <- modelo # criar cópia
 vals <- rep(NA_real_, ncell(r))
 vals[analise_c$cell] <- analise_c[["desm_evit"]]
@@ -183,20 +187,17 @@ values(r) <- vals
 names(r) <- "desm_evitado"
 r
 plot(r)
+writeRaster(r, "Finais/Desm_evitado.tif")
 
-
-## Parear com id da área protegida
-# Agora, rasterizar
+## Agora, obter id das células para parear com AP
 glimpse(analise_c)
-# Usar o raster modelo para obter os índices de célula
-modelo <- rast("Intermediarios/modelo.tif")
-plot(modelo)
 
+# Carregar extensão de cada classe de AP
 ucs_amz <- vect("Intermediarios/ucs.gpkg")
 tis_amz <- vect("Intermediarios/tis.gpkg")
 quil_amz <- vect("Intermediarios/quilombos.gpkg")
 
-# Parear ID das células com id APs
+# Criar função para parear ID das células com id APs
 parear_celulas <- function(rast) {
   n_cell <- cells(modelo, rast) |> as_tibble()
   rast_df <- rast |> 
@@ -227,6 +228,7 @@ resu_aps <- aps_cell |>
   select(-num)
 glimpse(resu_aps)
 
+# Salvar resultado - por células
 vroom::vroom_write(resu_aps, "Finais/Res_APs_cell.csv", append = F)
 
 resu_aps2 <- resu_aps |> 
@@ -243,21 +245,13 @@ resu_aps2 <- resu_aps |>
   )
 
 glimpse(resu_aps2)
-# vroom::vroom_write(resu_aps2, "Finais/Res_APs.csv", append = F)
-
-hist(resu_aps2$desm_evit)
-hist(resu_aps2$desmatamento)
-
-resu_aps2 |> 
-  ggplot() +
-  geom_point(aes(y = log(desm_evit), x = log(desmatamento)))
-
 
 ## Criar tabela com dados das APs:
 # id
 # nome
 # area/tamanho
-# dicionário de substituições
+
+# dicionário de substituições - estados
 siglas <- c(
   "AMAZONAS" = "AM",
   "MARANHÃO" = "MA",
@@ -268,9 +262,10 @@ siglas <- c(
   "PARÁ" = "PA",
   "TOCANTINS" = "TO",
   "RORAIMA" = "RR",
-  "PARANÁ" = "PA" # esse Paraná parece ter vindo por erro de digitação 
+  "PARANÁ" = "PA" # esse Paraná parece ter vindo por erro de digitação no arquivo original
 )
 
+# Organizar dados das Unidades de Conservação
 ucs <- vect("Dados/shp_cnuc_2025_03/cnuc_2025_03.shp") |> 
   as_tibble() |> 
   filter(cd_cnuc %in% resu_aps2$id) |> 
@@ -293,7 +288,7 @@ glimpse(ucs) # 364 UCs, ok
 hist(ucs$area)
 unique(ucs$uf)
 
-# Terras indígenas:
+# Organizar dados das Terras indígenas:
 tis <- vect("Dados/tis_poligonais/tis_poligonaisPolygon.shp") |> 
   as_tibble() |> 
   filter(terrai_cod %in% resu_aps2$id)  |> 
@@ -313,7 +308,7 @@ tis <- vect("Dados/tis_poligonais/tis_poligonaisPolygon.shp") |>
 glimpse(tis) 
 hist(tis$superficie) # tb parece estar em hectares
 
-# Quilombos
+# Organizar dados dos Quilombos
 quil <- vect("Dados/Áreas de Quilombolas/Áreas de Quilombolas.shp") |> 
   as_tibble() |> 
   mutate(
@@ -336,15 +331,13 @@ quil <- vect("Dados/Áreas de Quilombolas/Áreas de Quilombolas.shp") |>
 glimpse(quil)
 hist(quil$area)
 
-# Juntar aps em única tabela
+# Juntar dados das APs em única tabela
 aps <- ucs |> 
   bind_rows(tis) |> 
   bind_rows(quil) |> 
   left_join(resu_aps2)
 glimpse(aps)
 
+# Salvar resultado
 vroom::vroom_write(aps, "Finais/Res_APs.csv", append = F)
 
-aps |> 
-  ggplot() +
-  geom_point(aes(y = desm_evit, x = area))

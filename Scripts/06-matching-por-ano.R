@@ -1,6 +1,8 @@
 ###
-# Pareamento (matching) para análise de desmatamento - Relatório II
-# agosto/2025
+# Pareamento (matching) para análise de desmatamento evitado por áreas protegidas
+# da Amazônia de 1985-2024
+# Data: agosto/2025
+# Autor: Letícia Lopes Dias (leticia_lopes@discente.ufg.br)
 ###
 
 if(!require(pacman)) install.packages("pacman")
@@ -14,21 +16,22 @@ pacman::p_load(
 )
 
 
+# Matching com amostra ----------------------------------------------------
+# Rodar primeiro com banco de dados menor para testar
+
 dados <- vroom::vroom("Finais/Dados_1985.csv")
 glimpse(dados)
 table(dados$protecao)
 
+# Transformar dados de cobertura em fator
 dados <- dados |> 
   mutate(
     cobertura = as.factor(cobertura)
   )
 
-# Matching com amostra ----------------------------------------------------
-
-# Fazer teste com uma amostra
-
+# Criar amostra com 20mil células
 amostra <- dados |> 
-  group_by(protecao) |> 
+  group_by(protecao) |> # para ter nº igual de protegidas e não protegidas
   slice_sample(n = 20000)  |> 
   ungroup()
 
@@ -36,7 +39,7 @@ glimpse(amostra)
 amostra |> count(protecao)
 
 # Rodar quick matching
-mat_q <- matchit(protecao ~ agua_solo + carbono_solo + declividade +
+mat_q <- MatchIt::matchit(protecao ~ agua_solo + carbono_solo + declividade +
                    d_hidrovias + d_mineracao + d_municipios + d_rodovias +
                    elevacao + nitrogenio + precipitacao + temperatura, 
                  exact = ~cobertura,
@@ -46,10 +49,10 @@ mat_q <- matchit(protecao ~ agua_solo + carbono_solo + declividade +
                  estimand = "ATT")
 
 mat_q
-# Objeto de resultados guarda: weights (the computed matching weights), 
-# subclass (matching pair membership), distance (the estimated 
-# propensity score), and match.matrix (which control units are matched to 
-# each treated unit) 
+# Objeto de resultados guarda: weights (computed matching weights), 
+# subclass (matching pair membership), distance (estimated 
+# propensity score), e match.matrix (quais unidades de controle estão pareadas
+# com cada unidade de tratamento) 
 
 summary(mat_q)
 # Coluna Std. Pair Diff mostra a média absoluta  da diferença entre os  
@@ -63,6 +66,7 @@ dev.off()
 
 plot(summary(mat_q))
 
+# Limpar memória
 rm(
   list = 
     c("amostra",
@@ -71,85 +75,10 @@ rm(
 )
 
 # Matching por ano ----------------------------------------------------
+# Tutorial:
 # https://kosukeimai.github.io/MatchIt/articles/MatchIt.html
 
-
 # Criar função para rodar por ano
-calcula_matching <- function(ano) {
-  
-  tb <- vroom::vroom(str_c("Finais/Dados_", ano, ".csv"))
-  col_desm <- sym(paste0("deforestation_", ano))
-  tb <- tb |> 
-    mutate(
-      cobertura = as.factor(cobertura)
-    ) |>
-    rename(deforestation = !!col_desm) |> 
-  # -1 são as áreas com regeneração, excluir da análise por enquanto
-  filter(deforestation != -1)
-  
-  # Quick matching
-  mat_q <- matchit(protecao ~ agua_solo + carbono_solo + declividade +
-                     d_hidrovias + d_mineracao + d_municipios + d_rodovias +
-                     elevacao + nitrogenio + precipitacao + temperatura, 
-                   exact = ~cobertura,
-                   data = tb, 
-                   method = "quick",
-                   distance = "glm",
-                   estimand = "ATT"
-  )
-
-  balance_mat <- summary(mat_q, 
-                         standardized = T, 
-                         pair.dist = F, 
-                         improvement = T)
-
-    # Salvar resultados do matching
-  write_rds(balance_mat, file = str_c("Finais/balance_", ano,".rds")) 
-  
-  # Salvar gráfico de resumo do balanço final
-  png(str_c("Img/balance_", ano, ".png"),
-      width = 21, height = 16, units = "cm", res = 300)
-  plot(summary(mat_q))
-  dev.off()
-  
-  # Estimar efeito do tratamento
-  # primeiro, extrair tabela de dados pareados. Esse dataset contém apenas  
-  # as unidades pareadas e adiciona colunas para distance, weights,and subclass.
-  m_data <- match_data(mat_q)
-  
-  # Modelamos o resultado usando funções comuns para regressões como lm() or glm()
-  # incluindo os weights do matching. 
-  # Depois, usamos marginaleffects::avg_comparisons() para realizar g-computations 
-  # e estimar o ATT.
-  
-  # Uilizar Survey-Weighted Generalized Linear Model
-  # adequado quando matching é feito com reposição (indicação Luis)
-  design_mat <- svydesign(ids = ~subclass, weights = ~weights, data = m_data)
-  
-  # Primeiro, com desmatamento final
-  mod <- svyglm(deforestation ~ protecao, 
-                design_mat, 
-                family = quasibinomial()
-  )
-  
-  ATT_desm <- avg_comparisons(mod, 
-                              variables = "protecao",
-                              newdata = subset(m_data, protecao == 1),
-                              wts = "weights")
-  
-  # Salvar resultado
-  # Converter valores em data frame
-  df_result <- as.data.frame(ATT_desm) 
-  # Para estimar a área total de desmatamento evitado:
-  # Calcular a área total protegida, considerando q cada célula = 1km²
-  # Multiplicar pelo estimate
-  df_result$desm_evitado <- sum(m_data$protecao == 1) * abs(ATT_desm$estimate)
-  df_result$desm_total <- sum(m_data$deforestation == 1)
-  write_csv2(df_result, file = str_c("Finais/resultado_", ano, ".csv"))
-  
-}
-
-
 calcula_matching <- function(ano) {
   on.exit({
     try({
@@ -160,7 +89,7 @@ calcula_matching <- function(ano) {
     gc()
   }, add = TRUE)
   
-  # Desligue ALTREP para evitar picos de RAM
+  # Desligar ALTREP para evitar picos de RAM
   tb <- vroom::vroom(
     stringr::str_c("Finais/Dados_", ano, ".csv"),
     altrep = FALSE
@@ -172,7 +101,7 @@ calcula_matching <- function(ano) {
     dplyr::filter(deforestation != -1)
   # -1 são as áreas com regeneração, excluir da análise por enquanto
   
-  # Reduza o data.frame ANTES do matchit (só o que entra no modelo)
+  # Reduzir dataframe ANTES do matchit (só o que entra no modelo)
   tb_small <- dplyr::select(
     tb, deforestation, protecao, cobertura,
     agua_solo, carbono_solo, declividade,
@@ -208,13 +137,12 @@ calcula_matching <- function(ano) {
   m_data <- MatchIt::match_data(mat_q)
   rm(tb_small, mat_q); gc()
   
-  # Modelamos o resultado usando funções comuns para regressões como lm() or glm()
-  # incluindo os weights do matching. 
+  # Modelamos o resultado usando funções regressões incluindo weights do matching. 
   # Depois, usamos marginaleffects::avg_comparisons() para realizar g-computations 
-  # e estimar o ATT.
+  # e estimar o efeito (average treatment effect - ATT)
   
-  # Uilizar Survey-Weighted Generalized Linear Model
-  # adequado quando matching é feito com reposição (indicação Luis)
+  # Utilizar Survey-Weighted Generalized Linear Model
+  # adequado quando matching é feito com reposição
   design_mat <- survey::svydesign(ids = ~subclass, weights = ~weights, data = m_data)
   
   mod <- survey::svyglm(deforestation ~ protecao, design_mat, 
@@ -235,7 +163,6 @@ calcula_matching <- function(ano) {
   
   invisible(NULL)
 }
-
 
 calcula_matching("1985")
 

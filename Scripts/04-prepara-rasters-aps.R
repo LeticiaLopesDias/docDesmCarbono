@@ -1,6 +1,7 @@
 ###
-# Prepara os dados das APs, por ano de criação
-# agosto/2025
+# Prepara os dados das áreas protegidas (APs), por ano de criação
+# Data: agosto/2025
+# Autor: Letícia Lopes Dias (leticia_lopes@discente.ufg.br)
 ###
 
 if(!require(pacman)) install.packages("pacman")
@@ -14,15 +15,17 @@ pacman::p_load(
 modelo <- rast("Intermediarios/modelo.tif")
 plot(modelo)
 
+# Carregar extensão da Amazônia
 amz <- geobr::read_biomes() |> filter(name_biome == "Amazônia") |> vect()
 amz <- project(amz, crs(modelo))
 plot(amz)
 
 
-### Preciso rasterizar as áreas ocupadas por UCs, TIs e TQs
+### Preciso rasterizar as áreas ocupadas por unidades de conservação (UCs),
+# terras indígenas (TIs) e territórios quilombolas (TQs)
 # Um raster AP por ano - impacto no desmatamento vai ser APÓS a existência da área
 
-# Passo 1: carregar vetores:
+# Passo 1: carregar vetores
 # Unidades de conservação:
 ucs <- vect("Dados/shp_cnuc_2025_03/cnuc_2025_03.shp")
 crs(ucs)
@@ -41,13 +44,12 @@ names(ucs_amz)
 ucs_amz <- ucs_amz[, c("cd_cnuc", "ano")]
 ucs_amz$tipo <- "uc"
 
-
 # Terras indígenas:
 tis <- vect("Dados/tis_poligonais/tis_poligonaisPolygon.shp")
 tis <- tis |> terra::project(crs(modelo))
 names(tis)
 unique(tis$fase_ti)
-# Tirar TIs em estudo e "Encaminhada RI" - considerar apenas fases após delimitação
+# Remover TIs em estudo e "Encaminhada RI"; considerar apenas fases após delimitação
 tis <- tis[tis$fase_ti != "Em Estudo", ]
 tis <- tis[tis$fase_ti != "Encaminhada RI", ]
 
@@ -56,6 +58,7 @@ table(tis$fase_ti)
 
 tis_amz <- terra::intersect(tis, amz)
 head(tis_amz) # 320 TIs
+tis_amz
 
 # Pegar ano de criação das TIs pelas portarias
 tis_port <- read_csv("Dados/tis_poligonais_portarias.csv")
@@ -101,8 +104,6 @@ names(tis_amz)
 
 tis_amz <- tis_amz[, c("terrai_cod", "ano")]
 tis_amz$tipo <- "ti"
-
-
 
 # Quilombos
 quil <- vect("Dados/Áreas de Quilombolas/Áreas de Quilombolas.shp")
@@ -179,7 +180,6 @@ names(quil_amz2)
 quil_amz2 <- quil_amz2[, c("nr_process", "ano")]
 quil_amz2$tipo <- "tq"
 
-
 # Juntas aps em único shape
 ucs_amz
 tis_amz
@@ -205,13 +205,12 @@ ucs_amz <- vect("Intermediarios/ucs.gpkg")
 tis_amz <- vect("Intermediarios/tis.gpkg")
 quil_amz2 <- vect("Intermediarios/quilombos.gpkg")
 
-# Junta os três shapes: UCs, TIs e TQs
+# Juntar os três shapes: UCs, TIs e TQs
 aps <- rbind(ucs_amz, tis_amz, quil_amz2)
 plot(aps["tipo"])
-table(aps$tipo) # tudo certo!
+table(aps$tipo) # tudo certo
 
-# Agora, rasterizar por ano!
-
+# Agora, rasterizar por ano
 # Primeiro, áreas criadas ate 1985
 aps85 <- aps[aps$ano <= 1985, ]
 plot(aps85)
@@ -233,7 +232,6 @@ unique(aps$ano) |> sort()
 
 # Fazer função para rasterizar por ano
 rasterizar_aps <- function(ano) {
-  
   ap <- aps[aps$ano <= ano, ]
   r1 <- rasterize(ap, modelo, cover = T, touches = TRUE)
   r2 <- classify(r1, rcl = m)
@@ -248,16 +246,17 @@ rasterizar_aps <- function(ano) {
 
 rasterizar_aps(1985)
 
+# Testar:
 # teste <- rast("Intermediarios/APs_1985.tif")
 # plot(teste)
-# plot(r2_aps85) # idênticos, ok!
+# plot(r2_aps85) # idênticos, ok
 
+# Loop 1986 a 2024
 map(c(1986:2024), rasterizar_aps, .progress = T)
 
 
-
-# Periodos -----------------------------------------------------------
-
+# Separar por periodos --------------------------------------------------------
+# Para segunda análise, separar áreas em:
 ## APs 1985-2015
 ## APs total
 
@@ -266,6 +265,8 @@ aps <- rast(lista)
 
 plot(aps[[1]])
 aps[[31]]
+# Como células protegidas = 1; somar rasters
+# aps até 2015
 aps86_15 <- sum(aps[[c(1:31)]])
 plot(aps86_15)
 
@@ -274,6 +275,7 @@ m2 <- matrix(c(0, 0, 0, 1, 32, 1), ncol = 3, byrow = TRUE)
 aps86_15_c <- classify(aps86_15, rcl = m2)
 plot(aps86_15_c)
 
+# Todas
 aps_todas <- sum(aps[[c(1:40)]])
 plot(aps_todas)
 
@@ -281,6 +283,6 @@ m3 <- matrix(c(0, 0, 0, 1, 41, 1), ncol = 3, byrow = TRUE)
 aps_todas_c <- classify(aps_todas, rcl = m3)
 plot(aps_todas_c)
 
-
+# Salvar resultados
 writeRaster(aps86_15_c, "Intermediarios/APs_86_15.tif", overwrite = TRUE)
 writeRaster(aps_todas_c, "Intermediarios/APs_todas.tif", overwrite = TRUE)

@@ -1,6 +1,7 @@
 ### 
-# Cálculo do Desmatamento para Doutorado - dados MapBiomas
-# outubro/2025
+# Cálculo do Desmatamento na Amazônia de 1986 a 2024
+# Data: outubro/2025
+# Autor: Letícia Lopes Dias (leticia_lopes@discente.ufg.br)
 ###
 
 if(!require(pacman)) install.packages("pacman")
@@ -9,9 +10,7 @@ pacman::p_load(
   tidyverse
 )
 
-
-# Carregar dados de uso do solo
-# Teste:
+# Testar se raster está ok
 teste <- rast("Dados/MapBiomas/r_amz/UsoCobertura_1985.tif")
 plot(teste)
 res(teste)*111 # ~1km
@@ -77,6 +76,7 @@ teste_c <- classify(teste, cbind(leg$Class_ID, leg$nativa))
 plot(teste_c)
 # Deu certo
 
+# Conferir processo de cálculo do desmatamento, após reclassificar
 teste2 <- rast("Dados/MapBiomas/r_amz/UsoCobertura_1986.tif")
 teste2_c <- classify(teste2, cbind(leg$Class_ID, leg$nativa))
 plot(teste2_c)
@@ -90,14 +90,17 @@ plot(desm)
 # Usar esse arquivo para criar modelo
 # ajustar para área do bioma amazônia
 
+# Baixar extensão da Amazônia
 amz <- geobr::read_biomes() |> filter(name_biome == "Amazônia") |> vect()
 plot(amz)
 crs(amz)
 
+# Reprojetar para CRS do raster
 amz <- project(amz, crs(teste))
 plot(desm)
 plot(amz, add = T)
 
+# Deixar células do modelo = 1
 modelo <- desm^0
 modelo <- modelo |> 
   crop(amz) |> 
@@ -105,7 +108,7 @@ modelo <- modelo |>
 plot(modelo)
 writeRaster(modelo, "Intermediarios/modelo.tif")
 
-# Agora, criar uma função para calcular desmatamento anual e salvar tif
+# Criar uma função para calcular desmatamento anual e salvar tif
 
 calcula_desm <- function(ano) {
 
@@ -128,13 +131,15 @@ calcula_desm <- function(ano) {
 
 calcula_desm(1985)
 
+# Checar arquvivo gerado
 # teste3 <- rast("Intermediarios/Desm_1986.tif")
 # plot(teste3)
-# plot(desm) # deu certo!
-# Por enquanto, vou manter valor de regeneração (-1), caso eu queira usar depois
+# plot(desm) # ok
+# Por enquanto, vou manter valor de regeneração (-1)
 
 map(c(1985:2023), calcula_desm, .progress = T)
 
+# Para outra análise, separar períodos:
 ## Desmatamento 1985-2015
 ## Desmatamento 2016-2024
 
@@ -142,7 +147,7 @@ lista <- list.files("Intermediarios/", pattern = "Desm", full.names = T)
 desm <- rast(lista)
 
 plot(desm[[2]])
-desm[[39]]
+desm[[30]]
 desm86_15 <- sum(desm[[c(1:30)]])
 plot(desm86_15)
 

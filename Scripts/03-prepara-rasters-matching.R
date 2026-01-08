@@ -1,6 +1,7 @@
 ###
-# Preparar dados para matching - Relatório II
-# agosto/2025
+# Preparar dados/covariaveis para matching
+# Data: agosto/2025
+# Autor: Letícia Lopes Dias (leticia_lopes@discente.ufg.br)
 ###
 
 if(!require(pacman)) install.packages("pacman")
@@ -13,26 +14,27 @@ pacman::p_load(
 # Transformar dados em rasters padronizados de 1km de resolução, na extensão 
 # da Amazônia
 
-# Abrir modelo
+# Carregar modelo
 modelo <- rast("Intermediarios/modelo.tif")
 plot(modelo)
 res(modelo)*111 # 1km
 crs(modelo)
 
+# Carregar extensão da Amazônia
 amz <- geobr::read_biomes() |> filter(name_biome == "Amazônia") |> vect()
 amz <- project(amz, crs(modelo))
 plot(amz)
 
 # Rodovias ----------------------------------------------------------------
-# Calcular a distância com os dados para o Brasil e depois recortar raster de
-# distância para Amazônia
+# Calcular a distância com os dados para o Brasil
+# depois recortar para Amazônia
 
 # Rodovias federais:
 fed <- vect("Dados/rodovia-federal/rodovia-federal.shp")
 plot(fed)
 crs(fed)
 
-# Simplificar o vetor para facilitar o cálculo
+# Simplificar o vetor para otimizar o cálculo
 fed <- simplifyGeom(fed, tolerance = 0.1, makeValid = T)
 plot(fed)
 names(fed)
@@ -66,25 +68,26 @@ plot(dist_estradas)
 res(dist_estradas)*111
 compareGeom(dist_estradas, modelo)
 
+# Salvar o resultado
 writeRaster(dist_estradas, "Intermediarios/Dist_rodovias.tif", overwrite = TRUE)
 
 fed_amz <- mask(fed, amz)
 est_amz <- mask(est, amz)
 
-# Salvar mapa com distâncias e estradas
-# https://www.rdocumentation.org/packages/terra/versions/1.2-5/topics/plot
-tiff("Img/estradas.tif",
-     res = 300,
-     width = 12, height = 10, units = "cm")
+# Vizualizar mapa com distâncias e estradas
+# Mais info sobre terra::plot: https://www.rdocumentation.org/packages/terra/versions/1.2-5/topics/plot
+# tiff("Img/estradas.tif",
+#      res = 300,
+#      width = 12, height = 10, units = "cm")
 
 plot(dist_estradas,
      col = viridis::viridis(option = "turbo", n = 70, direction = -1),
      plg = list(title = "Distância de \nestradas", size = c(.7,1)),
      axes = F)
-#plot(fed_amz, add = T, col = "grey70")
-#plot(est_amz, add = T, col = "grey70")
+plot(fed_amz, add = T, col = "grey70")
+plot(est_amz, add = T, col = "grey70")
 
-dev.off()
+# dev.off()
 
 rm(list = c(
   "estradas",
@@ -98,6 +101,7 @@ rm(list = c(
 ))
 
 # Hidrovias ---------------------------------------------------------------
+# Calcular distância de hidrovias
 
 hid <- vect("Dados/vw_snv_aqa_hidrovias/vw_snv_aqa.shp")
 plot(hid)
@@ -113,27 +117,13 @@ plot(hid_r)
 
 dist_hid <- gridDist(hid_r, target = 1, scale = 1000)
 # scale = 1000 significa que resultado será em km
+
 dist_hid <- mask(dist_hid, modelo)
 plot(dist_hid)
-compareGeom(dist_hid, modelo)
+compareGeom(dist_hid, modelo) # ok
 
+# Salvar resultado
 writeRaster(dist_hid, "Intermediarios/Dist_hidrovias.tif", overwrite = TRUE)
-
-# hid_amz <- mask(hid, amz)
-# hid_amz <- crop(hid_amz, amz)
-
-# Salvar mapa com distâncias e estradas
-# https://www.rdocumentation.org/packages/terra/versions/1.2-5/topics/plot
-tiff("Img/hidrovias.tif",
-     res = 300,
-     width = 12, height = 10, units = "cm")
-
-plot(dist_hid,
-     col = viridis::viridis(option = "turbo", n = 70, direction = -1),
-     plg = list(title = "Distância de \nhidrovias", size = c(.7,1)),
-     axes = F)
-
-dev.off()
 
 # Limpar memória
 rm(list = c(
@@ -144,8 +134,8 @@ rm(list = c(
 )
 )
 
-
 # Areas urbanizadas -------------------------------------------------------
+# Calcular distância de centros urbanos
 
 urb <- vect("Dados/areas_urbanizadas_do_Brasil_2005_shapes/AreasUrbanizadas_MunicipiosAcima100k_porMunicipio.shp")
 plot(urb)
@@ -163,36 +153,22 @@ urb_cent <- centroids(urb)
 plot(urb_cent)
 
 
-# Rasterizar as hidrovias
+# Rasterizar centroides
 urb_r <- rasterize(urb_cent, modelo, background = 0)
 plot(urb_r)
 
 dist_urb <- gridDist(urb_r, target = 1, scale = 1000)
-# scale = 1000 significa que resultado será em km
+
 dist_urb <- mask(dist_urb, modelo)
 plot(dist_urb)
-compareGeom(dist_urb, modelo)
+compareGeom(dist_urb, modelo) # ok
 
+# Salvar resultado
 writeRaster(dist_urb, "Intermediarios/Dist_municipios.tif", overwrite = TRUE)
 
 # urb_cent <- mask(urb_cent, amz)
 # unique(urb_cent$Tipo)
 # n_distinct(urb_cent$NOME_MUNIC)
-
-
-# Salvar mapa com distâncias e estradas
-# https://www.rdocumentation.org/packages/terra/versions/1.2-5/topics/plot
-tiff("Img/municipios.tif",
-     res = 300,
-     width = 12, height = 10, units = "cm")
-
-plot(dist_urb,
-     col = viridis::viridis(option = "turbo", n = 70, direction = -1),
-     plg = list(title = "Distância de \nmunicípios", size = c(.7,1)),
-     axes = F)
-
-dev.off()
-
 
 # Limpar memória
 rm(list = c(
@@ -205,6 +181,7 @@ rm(list = c(
 )
 
 # Mineração   -------------------------------------------------------
+# Calcular distância de áreas de mineração
 
 min <- vect("Dados/Processos minerários ativos BRASIL/BRASIL.shp")
 plot(min)
@@ -223,7 +200,6 @@ plot(min_85)
 min_85
 
 # Para calcular distância, ver centroide das áreas
-?centroids
 min_cent <- centroids(min_85)
 plot(min_cent)
 
@@ -233,24 +209,13 @@ plot(min_r)
 
 dist_min <- gridDist(min_r, target = 1, scale = 1000)
 # scale = 1000 significa que resultado será em km
+
 dist_min <- mask(dist_min, modelo)
 plot(dist_min)
 compareGeom(dist_min, modelo)
 
+# Salvar resultado
 writeRaster(dist_min, "Intermediarios/Dist_mineracao.tif", overwrite = T)
-
-# Salvar mapa
-
-tiff("Img/mineracao.tif",
-     res = 300,
-     width = 12, height = 10, units = "cm")
-
-plot(dist_min,
-     col = viridis::viridis(option = "turbo", n = 70, direction = -1),
-     plg = list(title = "Distância de \nmineração", size = c(.7,1)),
-     axes = F)
-
-dev.off()
 
 # Limpar memória
 rm(list = c(
@@ -262,19 +227,16 @@ rm(list = c(
 )
 )
 
-
 # Precipitacao ------------------------------------------------------------
+# Calcular média anual de precipitação
 
 prec <- rast("Dados/BR_WC21_PP/BR_Prec01.asc")
 plot(prec)
 res(prec)
 res(modelo)
-compareGeom(modelo, prec) # vou ter que usar o resample
-
+compareGeom(modelo, prec) # vou ter que reamostrar o raster
 
 # Cada raster de precipitação é o acumulado de um mês
-# Então vou fazer a média anual para Amazônia
-
 # Abrir todos os rasters num único arquivo
 lista_prec <- list.files("Dados/BR_WC21_PP/", 
                          pattern = "BR_Prec[0-9].\\.asc",
@@ -300,22 +262,6 @@ plot(media)
 media
 compareGeom(media, modelo)
 
-writeRaster(media, "Intermediarios/Precip_media_anual.tif", overwrite = T)
-
-# Salvar mapa
-
-tiff("Img/precipitacao.tif",
-     res = 300,
-     width = 12, height = 10, units = "cm")
-
-plot(media,
-     col = viridis::viridis(option = "turbo", n = 70, direction = 1),
-     plg = list(title = "Precipitação \nmédia anual", size = c(.7,1)),
-     axes = F)
-
-dev.off()
-
-
 rm(list = c(
   "media",
   "prec",
@@ -325,12 +271,10 @@ rm(list = c(
   "lista_prec"
 ))
 
-
 # Temperatura  ------------------------------------------------------------
+# Calcular média anual de temperatura
 
 # Cada raster de temperatura é a média de um mês
-# Então vou fazer a média anual para Amazônia
-
 # Abrir todos os rasters num único arquivo
 lista_temp <- list.files("Dados/BR_WC21_Tmed/", 
                          pattern = "BR_Tmed[0-9].\\.asc",
@@ -355,20 +299,8 @@ media <- sum(temp_amz2, na.rm = T)/12
 plot(media)
 media
 
+# Salvar resultado
 writeRaster(media, "Intermediarios/Temp_media_anual.tif", overwrite = T)
-
-# Salvar mapa
-
-tiff("Img/temperatura.tif",
-     res = 300,
-     width = 12, height = 10, units = "cm")
-
-plot(media,
-     col = viridis::viridis(option = "turbo", n = 70, direction = 1),
-     plg = list(title = "Temperatura \nmédia anual", size = c(.7,1)),
-     axes = F)
-
-dev.off()
 
 rm(list = c(
   "media",
@@ -379,10 +311,9 @@ rm(list = c(
   "lista_temp"
 ))
 
-
-
 # Elevação e Declividade ----------------------------------------------------
 
+# Elevação:
 elev <- rast("Dados/BR_WC21_Elev/BR_elev.asc")
 plot(elev)
 crs(elev)
@@ -393,43 +324,18 @@ elev_amz <- resample(elev, modelo, method = "bilinear")
 elev_amz <- project(elev_amz, crs(modelo)) |> mask(amz)
 plot(elev_amz)
 
+# Salvar resultado
 writeRaster(elev_amz, "Intermediarios/Elevacao.tif", overwrite = T)
-
-# Salvar mapa
-
-tiff("Img/elevacao.tif",
-     res = 300,
-     width = 12, height = 10, units = "cm")
-
-plot(elev_amz,
-     col = viridis::viridis(option = "turbo", n = 70, direction = 1),
-     plg = list(title = "Elevação", size = c(.7,1)),
-     axes = F)
-
-dev.off()
 
 
 # Calcular declividade a partir da elevação
-# Compara a altitude do pixel com seus vizinhos
+# terrain: Compara a altitude do pixel com seus vizinhos
 decl <- terra::terrain(elev_amz, "slope")
 decl <- mask(decl, amz)
 plot(decl)
 
+# Salvar resultado
 writeRaster(decl, "Intermediarios/Declividade.tif", overwrite = T)
-
-# Salvar mapa
-
-tiff("Img/declividade.tif",
-     res = 300,
-     width = 12, height = 10, units = "cm")
-
-plot(decl,
-     col = viridis::viridis(option = "turbo", n = 70, direction = 1),
-     plg = list(title = "Declividade", size = c(.7,1)),
-     axes = F)
-
-dev.off()
-
 
 rm(list = c(
   "elev",
@@ -438,6 +344,7 @@ rm(list = c(
 ))
 
 # Agua no solo ----------------------------------------------------------------
+# Ajustar raster de conteúdo de água no solo
 
 agua <- rast("Dados/cfvo_0-5cm_mean_1000.tif")
 plot(agua)
@@ -452,20 +359,8 @@ agua_amz <- resample(agua, modelo, method = "bilinear")
 agua_amz <- mask(agua_amz, amz)
 plot(agua_amz)
 
+# Salvar resultado
 writeRaster(agua_amz, "Intermediarios/Agua_solo.tif", overwrite = T)
-
-# Salvar mapa
-
-tiff("Img/agua.tif",
-     res = 300,
-     width = 12, height = 10, units = "cm")
-
-plot(agua_amz,
-     col = viridis::viridis(option = "turbo", n = 70, direction = -1),
-     plg = list(title = "Conteúdo de \nágua no solo", size = c(.7,1)),
-     axes = F)
-
-dev.off()
 
 rm( list = c(
   "agua",
@@ -473,8 +368,8 @@ rm( list = c(
 )
 )
 
-
 # Carbono no solo ----------------------------------------------------------------
+# Ajustar raster de quantidade de carbono no solo
 
 carb <- rast("Dados/ocd_0-5cm_mean_1000.tif")
 plot(carb)
@@ -488,30 +383,12 @@ carb_amz <- resample(carb, modelo, method = "bilinear")
 carb_amz <- mask(carb_amz, amz)
 plot(carb_amz)
 
+# Salvar resultado
 writeRaster(carb_amz, "Intermediarios/Carbono_solo.tif", overwrite = T)
 
 
-# Salvar mapa
-
-tiff("Img/carbono_solo.tif",
-     res = 300,
-     width = 12, height = 10, units = "cm")
-
-plot(carb_amz,
-     col = viridis::viridis(option = "turbo", n = 70, direction = 1),
-     plg = list(title = "Carbono no \nsolo", size = c(.7,1)),
-     axes = F)
-
-dev.off()
-
-rm( list = c(
-  "carb",
-  "carb_amz"
-)
-)
-
-
 # Nitrogênio no solo ----------------------------------------------------------------
+# Ajustar raster de conteúdo de nitrogênio no solo
 
 nit <- rast("Dados/nitrogen_0-5cm_mean_1000.tif")
 plot(nit)
@@ -525,29 +402,12 @@ nit_amz <- resample(nit, modelo, method = "bilinear")
 nit_amz <- mask(nit_amz, amz)
 plot(nit_amz)
 
+# Salvar resultado
 writeRaster(nit_amz, "Intermediarios/Nitrogenio_solo.tif", overwrite = T)
-
-# Salvar mapa
-
-tiff("Img/nitrogenio.tif",
-     res = 300,
-     width = 12, height = 10, units = "cm")
-
-plot(nit_amz,
-     col = viridis::viridis(option = "turbo", n = 70, direction = 1),
-     plg = list(title = "Nitrogênio no \nsolo", size = c(.7,1)),
-     axes = F)
-
-dev.off()
-
-rm( list = c(
-  "nit",
-  "nit_amz"
-)
-)
 
 
 # Carbono - EBA ----------------------------------------------------------------
+# Ajustar raster de carbono acima do solo na Amazônia
 
 carb <- rast("Dados/biomass_Mgha_WGS84.tif")
 plot(carb)
@@ -568,47 +428,31 @@ plot(carb_amz, colNA = "red")
 plot(modelo, colNA = "red")
 
 # Contar celulas q não são NA em cada raster
-# Transform non-NA values to 1
+# Transformar valores que não são NA em 1
 carb_amz2 <- carb_amz
 carb_amz2[!is.na(carb_amz2)] <- 1
 plot(carb_amz2)
 
-# Get frequency of pixels by value
+# Tirar frequência
 freq(carb_amz2)
-freq(modelo) # tem uma parte no modelo que não existe no mapa de biomassa
+freq(modelo) 
+# Uma parte no modelo que não existe no mapa de biomassa
+# então, para algumas células, não terei estimativa de carbono
 
 carb_amz2[is.na(carb_amz2)] <- 0
 modelo[is.na(modelo)] <- 0
 plot(modelo-carb_amz2)
 freq(modelo-carb_amz2)
-# Para algumas células, não terei estimativa de carbono
 
 #carb_amz[263530]
 #carb_amz[266980]
 
+# Salvar resultado
 writeRaster(carb_amz, "Intermediarios/Carbono_eba.tif", overwrite = T)
-
-# Salvar mapa
-
-tiff("Img/carbono_eba.tif",
-     res = 300,
-     width = 12, height = 10, units = "cm")
-
-plot(carb_amz,
-     col = viridis::viridis(option = "turbo", n = 70, direction = 1),
-     plg = list(title = "Carbono (tC/ha)", size = c(.7,1)),
-     axes = F)
-
-dev.off()
-
-rm(list = c(
-  "carb",
-  "carb_amz"
-)
-)
 
 
 # Cobertura original ------------------------------------------------------
+# Ajustar raster de uso e cobertura original (1985)
 
 # Carregar dados de uso do solo 1985 - MapBiomas 
 orig <- rast("Dados/MapBiomas/r_amz/UsoCobertura_1985.tif")
@@ -628,42 +472,25 @@ plot(orig_amz, col = leg$Color)
 
 compareGeom(orig_amz, modelo) # ok
 
+# Salvar resultado
 writeRaster(orig_amz, "Intermediarios/Cobertura_orig.tif", overwrite = T)
 
-# Transformar em fator com os rótulos corretos
-classes <- unique(orig_amz)
-leg_plot <- leg |> filter(Class_ID %in% classes$classification_1985)
-leg_plot <- leg_plot[order(leg_plot$Class_ID), ]
+# Cobertura final --------------------------------------------------------
+# Ajustar raster de uso e cobertura do ano final da análise (2024)
 
-orig_amz2 <- orig_amz
-levels(orig_amz2) <- data.frame(ID = leg_plot$Class_ID, 
-                               value = leg_plot$Descricao)
-levels(orig_amz2)[[1]]$value
-freq(orig_amz2)
-plot(orig_amz2)
+# Carregar dados de uso do solo 2024 - MapBiomas 
+fim <- rast("Dados/MapBiomas/r_amz/UsoCobertura_2024.tif")
+plot(fim)
+res(fim)*111 # ~1km
 
-cores <- c("#1f8d49", "#7dc975", "#04381d", "#026975", "#7a5900",
-           "#519799", "#d6bc74", "#edde8e", "#ffefc3","#ffa07a",
-           "#d4271e", "#db4d4f", "#ffaa5f", "#9c0027", "#fc8114",
-           "#2532e4", "#9065d0", "#f5b3c8", "#f54ca9","#e6ccff")
- 
-# Salvar mapa
-tiff("Img/cobertura1985.tif",
-     res = 300,
-     width = 20, height = 10, units = "cm")
+compareGeom(fim, modelo)
+# Reamostrar classes para modelo
+fim_amz <- resample(fim, modelo, method = "near")
+unique(fim_amz) # manteve valores, ok
+fim_amz <- mask(fim_amz, amz)
+plot(fim_amz, col = leg$Color)
 
-plot(orig_amz2, 
-     col = cores,
-     type = "classes", 
-     axes = F,
-     plg = list(
-       cex = 0.8, # Tamanho da fonte
-       ncol = 1,
-       size = c(.8,1)
-     ),
-     colNA = "white"
-    )
+compareGeom(fim_amz, modelo) # ok
 
-
-dev.off()
-
+# Salvar resultado
+writeRaster(fim_amz, "Intermediarios/Cobertura_final.tif", overwrite = T)

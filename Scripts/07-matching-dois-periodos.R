@@ -1,6 +1,8 @@
 ###
-# Pareamento (matching) para análise de desmatamento - Relatório II
-# outubro/2025
+# Pareamento (matching) para análise de desmatamento evitado
+# separado por períodos: 1985-2015 e 2016 - 2024
+# Data: outubro/2025
+# Autor: Letícia Lopes Dias (leticia_lopes@discente.ufg.br)
 ###
 
 if(!require(pacman)) install.packages("pacman")
@@ -13,13 +15,12 @@ pacman::p_load(
   rlang
 )
 
-
-# Matching 85 a 14, 15 a 24 --------------------------------------------------
+# Tutorial
 # https://kosukeimai.github.io/MatchIt/articles/MatchIt.html
 
-### 1985 a 2014
-# Desligue ALTREP para evitar picos de RAM
-tb1 <- vroom::vroom("Finais/Dados_85_14.csv", altrep = FALSE)
+### 1985 a 2015
+# Desligar ALTREP para evitar picos de RAM
+tb1 <- vroom::vroom("Finais/Dados_85_15.csv", altrep = FALSE)
 tb1 <- dplyr::mutate(tb1, cobertura = as.factor(cobertura)) |>
   dplyr::filter(sum != -1) |> 
   dplyr::rename(desmatamento = sum)
@@ -38,10 +39,10 @@ mat_q1 <- MatchIt::matchit(
   
 balance_mat1 <- summary(mat_q1, standardized = TRUE, pair.dist = FALSE, 
                         improvement = TRUE)
-readr::write_rds(balance_mat1, file = "Finais/balance_85_14.rds")
+readr::write_rds(balance_mat1, file = "Finais/balance_85_15.rds")
 rm(balance_mat1); gc()
   
-grDevices::png("Img/balance_85_14.png",
+grDevices::png("Img/balance_85_15.png",
                width = 21, height = 16, units = "cm", res = 300)
 plot(summary(mat_q1))
 grDevices::dev.off()
@@ -51,18 +52,13 @@ grDevices::dev.off()
 # as unidades pareadas e adiciona colunas para distance, weights,and subclass.
 m_data1 <- MatchIt::match_data(mat_q1)
 glimpse(m_data1)
-# Salvar esses dados para conseguir retornar ao valor por AP
-readr::write_rds(m_data1, file = "Finais/m_data_85_14.rds")
+# Salvar esses dados para conseguir retornar ao valor por área protegida
+readr::write_rds(m_data1, file = "Finais/m_data_85_15.rds")
 
+# Limpar memória
 rm(tb1, mat_q1); gc()
   
-# Modelamos o resultado usando funções comuns para regressões como lm() or glm()
-# incluindo os weights do matching. 
-# Depois, usamos marginaleffects::avg_comparisons() para realizar g-computations 
-# e estimar o ATT.
-  
-# Uilizar Survey-Weighted Generalized Linear Model
-# adequado quando matching é feito com reposição (indicação Luis)
+# Utilizar Survey-Weighted Generalized Linear Model
 design_mat1 <- survey::svydesign(ids = ~subclass, weights = ~weights, 
                                 data = m_data1)
   
@@ -81,26 +77,27 @@ df_result1 <- as.data.frame(ATT_desm1)
 df_result1$desm_evitado <- sum(m_data1$protecao == 1) * abs(ATT_desm1$estimate)
 df_result1$desm_total   <- sum(m_data1$desmatamento == 1)
 glimpse(df_result1)
-readr::write_csv2(df_result1, file = stringr::str_c("Finais/resultado_85_14.csv"))
+readr::write_csv2(df_result1, file = stringr::str_c("Finais/resultado_85_15.csv"))
   
-# Conferir se tenho o resultado por célula salvo, para depois tirar valor por AP!!
+# Conferir se tenho o resultado por célula salvo, para depois tirar valor por AP
 
 # Ver se resultado foi salvo corretamente
-teste <- read_csv2("Finais/resultado_85_14.csv")
+teste <- read_csv2("Finais/resultado_85_15.csv")
 teste$p.value
 teste$estimate
 teste$desm_evitado
 teste$desm_total
-# ok, salvo corretamente 
+# ok
 
-teste <- read_rds("Finais/balance_85_14.rds")
+teste <- read_rds("Finais/balance_85_15.rds")
 teste
+
 # Limpar memória
 rm(list = ls()); gc()
 
 
 
-### 2015 a 2024
+### 2016 a 2024
 # com carbono
 tb2 <- vroom::vroom("Finais/Dados_16_24.csv", altrep = FALSE)
 tb2 <- dplyr::mutate(tb2, cobertura = as.factor(cobertura)) |>
@@ -119,10 +116,10 @@ mat_q2 <- MatchIt::matchit(
 
 balance_mat2 <- summary(mat_q2, standardized = TRUE, pair.dist = FALSE, 
                         improvement = TRUE)
-readr::write_rds(balance_mat2, file = "Finais/balance_15_24.rds")
+readr::write_rds(balance_mat2, file = "Finais/balance_16_24.rds")
 rm(balance_mat2); gc()
 
-grDevices::png("Img/balance_15_24.png",
+grDevices::png("Img/balance_16_24.png",
                width = 21, height = 16, units = "cm", res = 300)
 plot(summary(mat_q2))
 grDevices::dev.off()
@@ -132,7 +129,7 @@ grDevices::dev.off()
 # as unidades pareadas e adiciona colunas para distance, weights,and subclass.
 m_data2 <- MatchIt::match_data(mat_q2)
 # Salvar esses dados para conseguir retornar ao valor por AP
-readr::write_rds(m_data2, file = "Finais/m_data_15_24.rds")
+readr::write_rds(m_data2, file = "Finais/m_data_16_24.rds")
 
 rm(tb2, mat_q2); gc()
 
@@ -154,4 +151,4 @@ df_result2 <- as.data.frame(ATT_desm2)
 # Multiplicar pelo estimate
 df_result2$desm_evitado <- sum(m_data2$protecao == 1) * abs(ATT_desm2$estimate)
 df_result2$desm_total   <- sum(m_data2$desmatamento == 1)
-readr::write_csv2(df_result2, file = "Finais/resultado_15_24.csv")
+readr::write_csv2(df_result2, file = "Finais/resultado_16_24.csv")

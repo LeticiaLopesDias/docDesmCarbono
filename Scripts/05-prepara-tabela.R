@@ -1,8 +1,8 @@
 ### 
-# Prepara tabela de dados para matching - Relatório II
-# outubro/2025
+# Prepara tabelas de dados para matching
+# Data: outubro/2025
+# Autor: Letícia Lopes Dias (leticia_lopes@discente.ufg.br)
 ###
-
 
 if(!require(pacman)) install.packages("pacman")
 pacman::p_load(
@@ -42,13 +42,14 @@ plot(covariaveis)
 # plot(covariaveis[[1]], colNA = "red")
 # plot(covariaveis[[4]], colNA = "red")
 
-# NA está na parte externa, que eu não quero considerar mesmo. Preciso indicar isso 
+# NA está na parte externa, que eu não quero considerar mesmo. 
+# Preciso indicar isso 
 # no momento de transformar em tabela
 
 res(covariaveis)*111
 ncell(covariaveis) # 8 milhões de células
 
-# Entrada da função Match precisa ser data frames
+# Entrada da função Match precisa ser dataframe
 covariaveis_df <- as.data.frame(covariaveis, xy = T, cells = T, na.rm = T)
 glimpse(covariaveis_df) # 4 milhões de células, sem NA
 
@@ -91,15 +92,17 @@ salvar_tabelas <- function(ano) {
   
 }
 
+# vroom otimiza letura de tabelas com muitas linhas
 salvar_tabelas(1985)
 
 # teste <- vroom::vroom("Finais/Dados_1985.csv")
 # glimpse(teste)
 # glimpse(dados_c) # ok!
 
+# Loop para todos os anos
 map(c(1985:2023), salvar_tabelas, .progress = T)
 
-
+# Para análises por período:
 ## Tabela 1985-2015
 prot1 <- rast(str_c("Intermediarios/APs_86_15.tif"))
 prot1_df <- as.data.frame(prot1, xy = T, cells = T, na.rm = T) |> 
@@ -115,7 +118,7 @@ desm1_df <- as.data.frame(desm1, xy = T, cells = T, na.rm = T) |>
 tb1_d <- tb1 |> left_join(desm1_df)
 glimpse(tb1_d)
 
-vroom::vroom_write(tb1_d, "Finais/Dados_85_14.csv", append = F)
+vroom::vroom_write(tb1_d, "Finais/Dados_85_15.csv", append = F)
 
 ## Tabela 2016-2024
 prot2 <- rast("Intermediarios/APs_todas.tif")
